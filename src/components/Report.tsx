@@ -8,7 +8,7 @@ interface ReportProps {
   jdFileName?: string;
 }
 
-const Report: React.FC<ReportProps> = ({ reports, vacancyName, jobDescription, jdFileName }) => {
+const Report: React.FC<ReportProps> = ({ reports, vacancyName, jdFileName }) => {
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-700">
       {/* Header */}

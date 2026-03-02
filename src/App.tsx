@@ -1,6 +1,6 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { AppState, ResumeData } from './types';
+import React, { useState, useRef } from 'react';
+import { AppState } from './types';
 import { analyzeResume } from './services/geminiService';
 import { UploadIcon, BrainIcon, FileIcon, AlertIcon } from './components/Icon';
 import Report from './components/Report';

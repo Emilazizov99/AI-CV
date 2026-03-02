@@ -15,13 +15,13 @@ import { ResumeData } from '../types';
  * @returns Promise with resume analysis data
  */
 export async function analyzeResume(
-  base64: string | null,
-  mimeType: string,
+  _base64: string | null,
+  _mimeType: string,
   vacancyName: string,
   jobDescription: string,
   fileName: string,
-  jdBase64: string,
-  jdMimeType: string,
+  _jdBase64: string,
+  _jdMimeType: string,
   rawText?: string,
   jdRawText?: string
 ): Promise<ResumeData> {
