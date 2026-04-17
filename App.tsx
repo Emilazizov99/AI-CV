@@ -5,6 +5,23 @@ import { analyzeResume } from './services/geminiService';
 import { UploadIcon, BrainIcon, FileIcon, AlertIcon } from './components/Icon';
 import Report from './components/Report';
 import mammoth from 'mammoth';
+import JSZip from 'jszip';
+
+const getMimeType = (file: File): string => {
+  if (file.type) return file.type;
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'pdf': return 'application/pdf';
+    case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    case 'doc': return 'application/msword';
+    case 'txt': return 'text/plain';
+    case 'rtf': return 'application/rtf';
+    case 'jpg':
+    case 'jpeg': return 'image/jpeg';
+    case 'png': return 'image/png';
+    default: return 'application/octet-stream';
+  }
+};
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
@@ -17,22 +34,84 @@ const App: React.FC = () => {
     jdFile: null,
     selectedFiles: []
   });
+  const [isDragging, setIsDragging] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const jdFileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const processFiles = async (fileList: File[]) => {
+    const newFiles: File[] = [];
+
+    for (const file of fileList) {
+      if (file.name.toLowerCase().endsWith('.zip')) {
+        try {
+          const zip = await JSZip.loadAsync(file);
+          const zipFiles: File[] = [];
+          
+          const promises: Promise<void>[] = [];
+          zip.forEach((relativePath: string, zipEntry: any) => {
+            // Skip directories and hidden files (like __MACOSX)
+            if (!zipEntry.dir && !relativePath.startsWith('__MACOSX') && !relativePath.includes('/.')) {
+              const promise = zipEntry.async('blob').then(blob => {
+                const extractedFile = new File([blob], zipEntry.name, { 
+                  type: getMimeType({ name: zipEntry.name, type: '' } as File) 
+                });
+                zipFiles.push(extractedFile);
+              });
+              promises.push(promise);
+            }
+          });
+          
+          await Promise.all(promises);
+          newFiles.push(...zipFiles);
+        } catch (err) {
+          console.error("Error unzipping file:", err);
+          setState(prev => ({ ...prev, error: `Failed to unzip ${file.name}` }));
+        }
+      } else {
+        newFiles.push(file);
+      }
+    }
+
+    setState(prev => ({
+      ...prev,
+      selectedFiles: [...prev.selectedFiles, ...newFiles],
+      error: null
+    }));
+  };
+
+  const handleFileSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
     
-    const fileList = Array.from(files);
-    setState(prev => ({
-      ...prev,
-      selectedFiles: [...prev.selectedFiles, ...fileList],
-      error: null
-    }));
+    const fileList = Array.from(files) as File[];
+    await processFiles(fileList);
     
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const fileList = Array.from(files) as File[];
+      await processFiles(fileList);
+    }
   };
 
   const handleJDFileSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -54,22 +133,6 @@ const App: React.FC = () => {
       ...prev,
       selectedFiles: prev.selectedFiles.filter((_, i) => i !== index)
     }));
-  };
-
-  const getMimeType = (file: File): string => {
-    if (file.type) return file.type;
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    switch (ext) {
-      case 'pdf': return 'application/pdf';
-      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      case 'doc': return 'application/msword';
-      case 'txt': return 'text/plain';
-      case 'rtf': return 'application/rtf';
-      case 'jpg':
-      case 'jpeg': return 'image/jpeg';
-      case 'png': return 'image/png';
-      default: return 'application/octet-stream';
-    }
   };
 
   const extractTextFromWord = async (file: File): Promise<string> => {
@@ -139,7 +202,7 @@ const App: React.FC = () => {
         }
 
         // Add a small safety delay between requests
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise(r => setTimeout(r, 1000));
         
         const report = await analyzeResume(
           base64,
@@ -315,7 +378,16 @@ const App: React.FC = () => {
             </div>
 
             <div className="md:col-span-5 space-y-6 sticky top-24">
-              <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100 min-h-[450px] flex flex-col">
+              <div 
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`bg-white p-8 rounded-[32px] shadow-sm border-2 min-h-[450px] flex flex-col transition-all duration-300 ${
+                  isDragging 
+                    ? 'border-indigo-500 bg-indigo-50/50 scale-[1.02] shadow-xl' 
+                    : 'border-slate-100'
+                }`}
+              >
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Attachments Section</h3>
                   <span className="bg-indigo-600 text-white px-3 py-1 rounded-full text-[10px] font-bold">{state.selectedFiles.length} Added</span>
@@ -323,10 +395,16 @@ const App: React.FC = () => {
 
                 <div className="flex-1 overflow-y-auto space-y-3 mb-6 pr-2 custom-scrollbar">
                   {state.selectedFiles.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-300 text-center py-12 border-2 border-dashed border-slate-50 rounded-2xl">
-                      <FileIcon />
-                      <p className="text-sm font-semibold mt-4">Queue is empty</p>
-                      <p className="text-[10px] uppercase font-bold tracking-widest mt-1 opacity-50">Upload 1 or more files (PDF, Word, Images, etc.)</p>
+                    <div className={`h-full flex flex-col items-center justify-center text-center py-12 border-2 border-dashed rounded-2xl transition-colors ${
+                      isDragging ? 'border-indigo-300 text-indigo-400' : 'border-slate-50 text-slate-300'
+                    }`}>
+                      <div className={`transition-transform duration-300 ${isDragging ? 'scale-125 animate-bounce' : ''}`}>
+                        <FileIcon />
+                      </div>
+                      <p className="text-sm font-semibold mt-4">{isDragging ? 'Drop files now' : 'Queue is empty'}</p>
+                      <p className="text-[10px] uppercase font-bold tracking-widest mt-1 opacity-50">
+                        {isDragging ? 'Release to add to queue' : 'Upload or Drag & Drop (PDF, Word, ZIP)'}
+                      </p>
                     </div>
                   ) : (
                     state.selectedFiles.map((file, idx) => (
@@ -347,7 +425,7 @@ const App: React.FC = () => {
                     onClick={() => fileInputRef.current?.click()}
                     className="w-full py-4 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl text-slate-500 text-sm font-bold hover:border-indigo-400 hover:text-indigo-600 transition-all flex items-center justify-center gap-2"
                   >
-                    <UploadIcon /> Add CV Attachments (Any Format)
+                    <UploadIcon /> Add CV Attachments (PDF, Word, ZIP)
                   </button>
                   <button 
                     disabled={state.selectedFiles.length === 0}

@@ -90,7 +90,7 @@ const Report: React.FC<ReportProps> = ({ reports, vacancyName, jobDescription, j
             <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
               <FileIcon /> Candidate Ranking
             </h3>
-            <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+            <div className="space-y-2 max-h-[800px] overflow-y-auto pr-2 custom-scrollbar">
               {sortedReports.map((r, idx) => (
                 <div 
                   key={idx}

@@ -83,7 +83,10 @@ const CV_ANALYSIS_SCHEMA = {
           type: Type.STRING, 
           description: "Must be one of: 'Very Poor Fit', 'Poor Fit', 'Moderate / Partial Fit', 'Good Fit', 'Excellent / Strong Fit'" 
         },
-        matchReason: { type: Type.STRING }
+        matchReason: { 
+          type: Type.STRING,
+          description: "A summary explanation of the match, specifically highlighting why the candidate is or is not a good fit for the specific role title and core duties."
+        }
       },
       required: ["score", "scoringBreakdown", "strengths", "suggestions", "jobFit", "matchReason"]
     }
@@ -102,7 +105,7 @@ export const analyzeResume = async (
   rawText?: string,
   jdRawText?: string
 ): Promise<ResumeData> => {
-  const maxRetries = 3;
+  const maxRetries = 5;
   let retryCount = 0;
 
   const execute = async (): Promise<ResumeData> => {
@@ -142,8 +145,12 @@ export const analyzeResume = async (
 
         Scoring Criteria (Total 100%):
         1. Experience Overlap (Working Area): 50% weight. (Max 50 points)
+           - Be extremely discerning. A high score (45-50) is ONLY for direct role matches with the exact same responsibilities.
+           - If the candidate is from a related but different role (e.g., HR Operations vs HR Data Analyst), the score should typically fall between 30-40 (60-80% of the category weight) depending on transferable skills.
+           - Penalize heavily if the core function of the JD (e.g., Data Analysis, SQL, PowerBI) is missing from the CV's experience, even if the industry (HR) is the same.
         2. Language Overlap: 15% weight. (Max 15 points)
         3. Skills Overlap: 20% weight. (Max 20 points)
+           - Check for specific tools, certifications, and technical skills mentioned in the JD.
         4. Education Overlap: 15% weight. (Max 15 points)
 
         Instructions:
@@ -151,6 +158,7 @@ export const analyzeResume = async (
         - Provide a summary of their profile.
         - Calculate the score based on the weighted criteria above. 
         - CRITICAL: Avoid "rounded" or "average" numbers (like 35, 40, 45). Be extremely granular and precise. Use the full range of points (e.g., 37.4, 41.2, 11.7). Every point should reflect a specific nuance in the match.
+        - ROLE RELEVANCE: Be strict. Do not give 90%+ total scores unless the candidate is a near-perfect match for the specific role title and core duties. A candidate with related experience but a different primary focus should not exceed 80% total match.
         - Provide the breakdown for each category in the scoringBreakdown object, including a detailed justification for each score explaining WHY that specific grade was given.
         - The total score must be the exact sum of the breakdown scores.
         - Categorize the "jobFit" strictly into one of these: "Very Poor Fit", "Poor Fit", "Moderate / Partial Fit", "Good Fit", "Excellent / Strong Fit".
@@ -187,7 +195,8 @@ export const analyzeResume = async (
       
       if (isRateLimit && retryCount < maxRetries) {
         retryCount++;
-        const delay = Math.pow(2, retryCount) * 2000; // 4s, 8s, 16s
+        // Exponential backoff: 5s, 10s, 20s, 40s, 80s
+        const delay = Math.pow(2, retryCount) * 2500; 
         console.warn(`Rate limit hit for ${fileName}. Retrying in ${delay}ms (Attempt ${retryCount}/${maxRetries})...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         return execute();
